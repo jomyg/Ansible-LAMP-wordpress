@@ -324,9 +324,9 @@ PLAY RECAP *********************************************************************
 172.31.9.224               : ok=21   changed=15   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 
 ```
-<center><img alt="wordpresssite" src=""> </img></center>
+<center><img alt="wordpresssite" src="firefox_HG85LeQBGG.png">  </img></center>
 
-<center><img alt="site" src=""> </img></center>
+<center><img alt="site" src="firefox_WiOz5k7s7m.png"> </img></center>
 
  ## Conclusion
 
