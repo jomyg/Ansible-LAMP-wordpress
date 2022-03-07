@@ -44,173 +44,199 @@ ansible 2.9.23
 ```sh
 ---
 
-- name: "Installing WordPress with LAMP Stack on Amazon Linux"
-  hosts: all
+- name: "Installing Lampstack On Amazon Linux servers. Lets roll"
   become: true
+  hosts: amazon
   vars:
-    domain_name: jomygeorge.xyz
-    httpd_port: 80
-    URL: https://wordpress.org/latest.zip
-    mysql_root_password: root@123
-    wp_user_name: wpuser
-    wp_user_password: wp@123
-    httpd_owner: apache
-    httpd_group: apache
-    wp_db_name: wordpressdatabase
-
+    httpd_port: "80"
+    httpd_user: "apache"
+    httpd_group: "apache"
+    httpd_domain: "blog.jomygeorge.xyz"
+    mysql_root_password: "mysqlpass@1"
+    mysql_user: "wordpress"
+    mysql_user_password: "wordpress"
+    mysql_database: "wordpress"
+    wordpress_url: "https://wordpress.org/latest.tar.gz"
   tasks:
-
-    - name: "APACHE WEBSERVER INSTALLATION"
+    
+    - name: "HTTPD WEBSERVER - Installing Packages. Please wait"
       yum:
-        name:
-          - httpd
+        name: httpd
         state: present
 
-    - name: "Installing PHP"
-      shell: "amazon-linux-extras install php7.2 -y"
-
-    - name: "Adding Virtualhost form local to destination"
+        
+    - name: "HTTPD WEBSERVER - Installing php7.4 "
+      shell: amazon-linux-extras install php7.4 -y
+        
+        
+    - name: "HTTPD WEBSERVER -  Creating httpd configuration file"
       template:
-        src: virtualhost.conf.j2
-        dest: /etc/httpd/conf.d/{{ domain_name }}.conf
-        owner: "{{ httpd_owner }}"
-        group: "{{ httpd_group}}"
+        src: "httpd.conf.tmpl"
+        dest: "/etc/httpd/conf/httpd.conf"
+        owner: "root"
+        group: "root"
 
-    - name: "Creating Documentroot for {{ domain_name}}"
+        
+    - name: "HTTPD WEBSERVER - Creating VirtalHost for domain blog.jomygeorge.xyz"
+      template:
+        src: "virtualhost.conf.tmpl"
+        dest: "/etc/httpd/conf.d/{{httpd_domain}}.conf"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+ 
+        
+        
+    - name: "HTTPD WEBSERVER - Creating documentRoot for our domain virtualhost {{ httpd_domain }}"
       file:
+        path: "/var/www/html/{{ httpd_domain }}"
         state: directory
-        path: /var/www/html/{{ domain_name }}
-        owner: "{{ httpd_owner }}"
-        group: "{{ httpd_group}}"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
 
-    - name: "Start & Enable Apache webserver"
+        
+        
+    - name: "HTTPD WEBSERVER - Creating simple test.html page and text.php for check"
+      copy:
+        src: "{{ item }}"
+        dest: "/var/www/html/{{ httpd_domain }}"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+      with_items:
+        - test.html
+        - test.php
+
+    
+    - name: "HTTPD WEBSERVER - httpd restart"
       service:
         name: httpd
         state: restarted
         enabled: true
-
-    - name: "Installing and setting up the Mariadb-server"
+            
+    - name: "Mariadb-Server - Installation"
       yum:
-        name:
+        name: 
           - mariadb-server
           - MySQL-python
         state: present
-      register: mariadb_status
-
-    - name: "Restarting & Enabling Mariadb"
-      when: mariadb_status.changed == true
+            
+        
+    - name: "Mariab - Restarting and enabling"
       service:
         name: mariadb
         state: restarted
         enabled: true
+   
 
-    - name: "Setup Root password for root user"
-      when: mariadb_status.changed == true
+    - name: "Mariadb - Setting Root password for mysql"
+      ignore_errors: true
       mysql_user:
-        login_user: root
+        login_user: "root"
         login_password: ""
-        name: root
+        user: "root"
         password: "{{ mysql_root_password }}"
-        host_all: yes
-
-
-    - name: "Create and passing the file from local to destination /root/.my.cnf"
-      when: mariadb_status.changed == true
-      template:
-        src:  my.cnf
-        dest: /root/.my.cnf
-        owner: root
-        group: root
-
-    - name: "Removing mariadb anonymous users"
-      when: mariadb_status.changed == true
-      mysql_user:
-        config_file: /root/.my.cnf
         host_all: true
-        name: ""
-        state: absent
+  
 
-    - name: "Remove test database from mariadb"
-      when: mariadb_status.changed == true
+    - name: "Mariadb - Removing Anonymous User from mariadb"
       mysql_user:
-        config_file: /root/.my.cnf
-        name: test
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        user: ""
+        host_all: true
         state: absent
-
-
-    - name: "Creating the wordpress database"
+            
+            
+    - name: "Mariadb - Removing the test Database"
       mysql_db:
-        config_file: /root/.my.cnf
-        name: "{{ wp_db_name }}"
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        name: "test"
+        state: absent
+            
+    - name: "Mariadb - Creating Extra database for the wordpress -->  {{ mysql_database }}"
+      mysql_db:
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        name: "{{ mysql_database }}"
         state: present
-
-    - name: "Creating Wordpress user"
+            
+    - name: "Mariadb - Creating one extra User {{ mysql_user }}"
       mysql_user:
-        config_file: /root/.my.cnf
-        name: "{{ wp_user_name }}"
-        password: "{{ wp_user_password }}"
-        priv: '{{ wp_db_name }}.*:ALL'
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        user: "{{ mysql_user }}"
+        host: "localhost"
         state: present
-
-
-    - name: "Downloading the Wordpress zip file on remote meachine"
+        password: "{{ mysql_user_password }}" 
+        priv: "{{ mysql_database }}.*:ALL"
+            
+    - name: "Wordpress - Downloading the tar File from official site"
       get_url:
-        url: "{{ URL }}"
-        dest: /tmp/wordpress.zip
-
-    - name: "Extracting Wordpress file on remote meachine"
+        url: "{{ wordpress_url }}"
+        dest: "/tmp/wordpress.tar.gz"
+            
+    - name: "Wordpress - Extracting the tar File which downloaded"
       unarchive:
-        remote_src: yes
-        src: /tmp/wordpress.zip
+        src: "/tmp/wordpress.tar.gz"
         dest: /tmp/
-
-    - name: "Moving Wordpress extracted files to website Document root"
+        remote_src: true
+            
+    - name: "Wordpress - Copying the Wordpress extrated files to documentroot"
       copy:
-        remote_src: yes
         src: /tmp/wordpress/
-        dest: /var/www/html/{{ domain_name }}/
-        owner: "{{ httpd_owner }}"
-        group: "{{ httpd_group}}"
-
-    - name: "Creating wp-config.php and pass to remote meachine"
+        dest: "/var/www/html/{{ httpd_domain }}"
+        remote_src: true
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+            
+    - name: "Wordpress - Creating custom wp-config.php to remote"
       template:
-        src: wp-config.php
-        dest: /var/www/html/{{ domain_name }}/wp-config.php
-        owner: "{{ httpd_owner }}"
-        group: "{{ httpd_group}}"
-
-    - name: "Post installation restart for the httpd and mariadb service"
+        src: wp-config.php.tmpl
+        dest: "/var/www/html/{{ httpd_domain }}/wp-config.php"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+            
+    - name: "Post-Installation restart for installed service"
       service:
         name: "{{ item }}"
         state: restarted
+        enabled: true
       with_items:
         - httpd
         - mariadb
+        
+    - name: "Post-Instalaltion - Cleanup like downloaded tar and extrated wordpress files"
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "/tmp/wordpress.tar.gz"
+        - "/tmp/wordpress/"
 ```
-### Behind the code : my.cnf
-```
-[client]
-user= root
-password={{ mysql_root_password }}
-```
-### Behind the code : virtualhost.conf.j2
+
+### Behind the code : virtualhost.conf.tmpl
 ```
 <virtualhost *:{{ httpd_port }}>
 
-  servername {{ domain_name }}
-  documentroot /var/www/html/{{ domain_name }}
+  servername {{ httpd_domain }}
+  documentroot /var/www/html/{{ httpd_domain }}
   directoryindex index.php index.html
 
-  <directory "/var/www/html/{{ domain_name }}">
+  <directory "/var/www/html/{{ httpd_domain }}">
      allowoverride all
   </directory>
 
 </virtualhost>
 ```
 
-### Behind the code : wp-config.php 
+### Behind the code : wp-config.php.tmpl
 ```
-You need to provide the variable name on wp-config.php as i have uploaded above
+You need to provide the variable name on wp-config.php.tmpl as i have uploaded above
+```
+
+### Behind the code : httpd.conf.tmpl
+```
+You need to provide the variable name on httpd.conf.tmpl as i have uploaded above
 ```
 
 > Lets us check the syntax of our code using below
@@ -221,73 +247,86 @@ playbook: main.yml
 > Let run the code and call the domain name on browser to access the wordpress dashboard
 
 ```
-~]$ ansible-playbook -i hosts main.yml
+[ec2-user@ip-172-31-0-122 ~]$ ansible-playbook -i hosts main.yml
 
-PLAY [Installing WordPress with LAMP on Amazon Linux] ************************************************************
-TASK [Gathering Facts] *************************************************************************************************
-ok: [172.31.34.80]
+PLAY [Installing Lampstack On Amazon Linux servers. Lets roll] *********************************************************************************************************
 
-TASK [APACHE WEBSERVER INSTALLATION] ***********************************************************************************
-changed: [172.31.34.80]
+TASK [Gathering Facts] *************************************************************************************************************************************************
+[WARNING]: Platform linux on host 172.31.9.224 is using the discovered Python interpreter at /usr/bin/python, but future installation of another Python interpreter
+could change this. See https://docs.ansible.com/ansible/2.9/reference_appendices/interpreter_discovery.html for more information.
+ok: [172.31.9.224]
 
-TASK [Installing PHP] **************************************************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER - Installing Packages. Please wait] **************************************************************************************************************
+ok: [172.31.9.224]
 
-TASK [Adding Virtualhost form local to destination] ********************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER - Installing php7.4] *****************************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Creating Documentroot for jomygeorge.xyz] ************************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER -  Creating httpd configuration file] ************************************************************************************************************
+ok: [172.31.9.224]
 
-TASK [Start & Enable Apache webserver] *********************************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER - Creating VirtalHost for domain blog.jomygeorge.xyz] ********************************************************************************************
+ok: [172.31.9.224]
 
-TASK [Installing and setting up the Mariadb-server] ********************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER - Creating documentRoot for our domain virtualhost blog.jomygeorge.xyz] **************************************************************************
+ok: [172.31.9.224]
 
-TASK [Restarting & Enabling Mariadb] ***********************************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER - Creating simple test.html page and text.php for check] *****************************************************************************************
+ok: [172.31.9.224] => (item=test.html)
+ok: [172.31.9.224] => (item=test.php)
 
-TASK [Setup Root password for root user] *******************************************************************************
-changed: [172.31.34.80]
+TASK [HTTPD WEBSERVER - httpd restart] *********************************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Create and passing the file from local to destination /root/.my.cnf] *********************************************
-changed: [172.31.34.80]
+TASK [Mariadb-Server - Installation] ***********************************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Removing mariadb anonymous users] ********************************************************************************
-changed: [172.31.34.80]
+TASK [Mariab - Restarting and enabling] ********************************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Remove test database from mariadb] *******************************************************************************
-ok: [172.31.34.80]
+TASK [Mariadb - Setting Root password for mysql] ***********************************************************************************************************************
+[WARNING]: Module did not set no_log for update_password
+changed: [172.31.9.224]
 
-TASK [Creating the wordpress database] *********************************************************************************
-changed: [172.31.34.80]
+TASK [Mariadb - Removing Anonymous User from mariadb] ******************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Creating Wordpress user] *****************************************************************************************
-changed: [172.31.34.80]
+TASK [Mariadb - Removing the test Database] ****************************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Downloading the Wordpress zip file on remote meachine] ***********************************************************
-changed: [172.31.34.80]
+TASK [Mariadb - Creating Extra database for the wordpress -->  wordpress] **********************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Extracting Wordpress file on remote meachine] ********************************************************************
-changed: [172.31.34.80]
+TASK [Mariadb - Creating one extra User wordpress] *********************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Moving Wordpress extracted files to website Document root] *******************************************************
-changed: [172.31.34.80]
+TASK [Wordpress - Downloading the tar File from official site] *********************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Creating wp-config.php and pass to remote meachine] **************************************************************
-changed: [172.31.34.80]
+TASK [Wordpress - Extracting the tar File which downloaded] ************************************************************************************************************
+changed: [172.31.9.224]
 
-TASK [Post installation restart for the httpd and mariadb service] *****************************************************
-changed: [172.31.34.80] => (item=httpd)
-changed: [172.31.34.80] => (item=mariadb)
+TASK [Wordpress - Copying the Wordpress extrated files to documentroot] ************************************************************************************************
+changed: [172.31.9.224]
 
-PLAY RECAP *************************************************************************************************************
-172.31.34.80               : ok=19   changed=17   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+TASK [Wordpress - Creating custom wp-config.php to remote] *************************************************************************************************************
+changed: [172.31.9.224]
+
+TASK [Post-Installation restart for installed service] *****************************************************************************************************************
+changed: [172.31.9.224] => (item=httpd)
+changed: [172.31.9.224] => (item=mariadb)
+
+TASK [Post-Instalaltion - Cleanup like downloaded tar and extrated wordpress files] ************************************************************************************
+changed: [172.31.9.224] => (item=/tmp/wordpress.tar.gz)
+changed: [172.31.9.224] => (item=/tmp/wordpress/)
+
+PLAY RECAP *************************************************************************************************************************************************************
+172.31.9.224               : ok=21   changed=15   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
 ```
-<center><img alt="wordpresssite" src="firefox_v6SMfRwDfn.png"> </img></center>
+<center><img alt="wordpresssite" src=""> </img></center>
 
-<center><img alt="site" src="firefox_PKu65llEh8.png"> </img></center>
+<center><img alt="site" src=""> </img></center>
 
  ## Conclusion
 
