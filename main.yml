@@ -1,0 +1,170 @@
+---
+
+- name: "Installing Lampstack On Amazon Linux servers. Lets roll"
+  become: true
+  hosts: amazon
+  vars:
+    httpd_port: "80"
+    httpd_user: "apache"
+    httpd_group: "apache"
+    httpd_domain: "blog.jomygeorge.xyz"
+    mysql_root_password: "mysqlpass@1"
+    mysql_user: "wordpress"
+    mysql_user_password: "wordpress"
+    mysql_database: "wordpress"
+    wordpress_url: "https://wordpress.org/latest.tar.gz"
+  tasks:
+    
+    - name: "HTTPD WEBSERVER - Installing Packages. Please wait"
+      yum:
+        name: httpd
+        state: present
+
+        
+    - name: "HTTPD WEBSERVER - Installing php7.4 "
+      shell: amazon-linux-extras install php7.4 -y
+        
+        
+    - name: "HTTPD WEBSERVER -  Creating httpd configuration file"
+      template:
+        src: "httpd.conf.tmpl"
+        dest: "/etc/httpd/conf/httpd.conf"
+        owner: "root"
+        group: "root"
+
+        
+    - name: "HTTPD WEBSERVER - Creating VirtalHost for domain blog.jomygeorge.xyz"
+      template:
+        src: "virtualhost.conf.tmpl"
+        dest: "/etc/httpd/conf.d/{{httpd_domain}}.conf"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+ 
+        
+        
+    - name: "HTTPD WEBSERVER - Creating documentRoot for our domain virtualhost {{ httpd_domain }}"
+      file:
+        path: "/var/www/html/{{ httpd_domain }}"
+        state: directory
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+
+        
+        
+    - name: "HTTPD WEBSERVER - Creating simple test.html page and text.php for check"
+      copy:
+        src: "{{ item }}"
+        dest: "/var/www/html/{{ httpd_domain }}"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+      with_items:
+        - test.html
+        - test.php
+
+    
+    - name: "HTTPD WEBSERVER - httpd restart"
+      service:
+        name: httpd
+        state: restarted
+        enabled: true
+            
+    - name: "Mariadb-Server - Installation"
+      yum:
+        name: 
+          - mariadb-server
+          - MySQL-python
+        state: present
+            
+        
+    - name: "Mariab - Restarting and enabling"
+      service:
+        name: mariadb
+        state: restarted
+        enabled: true
+   
+
+    - name: "Mariadb - Setting Root password for mysql"
+      ignore_errors: true
+      mysql_user:
+        login_user: "root"
+        login_password: ""
+        user: "root"
+        password: "{{ mysql_root_password }}"
+        host_all: true
+  
+
+    - name: "Mariadb - Removing Anonymous User from mariadb"
+      mysql_user:
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        user: ""
+        host_all: true
+        state: absent
+            
+            
+    - name: "Mariadb - Removing the test Database"
+      mysql_db:
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        name: "test"
+        state: absent
+            
+    - name: "Mariadb - Creating Extra database for the wordpress -->  {{ mysql_database }}"
+      mysql_db:
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        name: "{{ mysql_database }}"
+        state: present
+            
+    - name: "Mariadb - Creating one extra User {{ mysql_user }}"
+      mysql_user:
+        login_user: "root"
+        login_password: "{{ mysql_root_password }}"
+        user: "{{ mysql_user }}"
+        host: "localhost"
+        state: present
+        password: "{{ mysql_user_password }}" 
+        priv: "{{ mysql_database }}.*:ALL"
+            
+    - name: "Wordpress - Downloading the tar File from official site"
+      get_url:
+        url: "{{ wordpress_url }}"
+        dest: "/tmp/wordpress.tar.gz"
+            
+    - name: "Wordpress - Extracting the tar File which downloaded"
+      unarchive:
+        src: "/tmp/wordpress.tar.gz"
+        dest: /tmp/
+        remote_src: true
+            
+    - name: "Wordpress - Copying the Wordpress extrated files to documentroot"
+      copy:
+        src: /tmp/wordpress/
+        dest: "/var/www/html/{{ httpd_domain }}"
+        remote_src: true
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+            
+    - name: "Wordpress - Creating custom wp-config.php to remote"
+      template:
+        src: wp-config.php.tmpl
+        dest: "/var/www/html/{{ httpd_domain }}/wp-config.php"
+        owner: "{{ httpd_user }}"
+        group: "{{ httpd_group }}"
+            
+    - name: "Post-Installation restart for installed service"
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: true
+      with_items:
+        - httpd
+        - mariadb
+        
+    - name: "Post-Instalaltion - Cleanup like downloaded tar and extrated wordpress files"
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "/tmp/wordpress.tar.gz"
+        - "/tmp/wordpress/"
