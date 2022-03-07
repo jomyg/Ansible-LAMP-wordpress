@@ -51,7 +51,7 @@ ansible 2.9.23
     httpd_port: "80"
     httpd_user: "apache"
     httpd_group: "apache"
-    httpd_domain: "blog.jomygeorge.xyz"
+    httpd_domain: "blog.jomygeorge.xyz"            >>>>>>>>>>>>> You need to change the domain name
     mysql_root_password: "mysqlpass@1"
     mysql_user: "wordpress"
     mysql_user_password: "wordpress"
@@ -77,7 +77,7 @@ ansible 2.9.23
         group: "root"
 
         
-    - name: "HTTPD WEBSERVER - Creating VirtalHost for domain blog.jomygeorge.xyz"
+    - name: "HTTPD WEBSERVER - Creating VirtalHost for domain {{ httpd_domain }}"
       template:
         src: "virtualhost.conf.tmpl"
         dest: "/etc/httpd/conf.d/{{httpd_domain}}.conf"
